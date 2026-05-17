@@ -7,7 +7,7 @@
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet" />
-  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.2/css/all.min.css" integrity="sha512-SnH5WK+bZxgPHs44uWix+LLJAJ9/2PkPKZ5QiAj6Ta86w+fsb2TkR4j8R6CkWf9CcFjQ4SxI6m5L6fV9d5x0A==" crossorigin="anonymous" referrerpolicy="no-referrer" />
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.2/css/all.min.css" referrerpolicy="no-referrer" />
   <style>
     :root {
       --bg: #0d1117;
@@ -142,6 +142,7 @@
     const LARGE_VALUE_THRESHOLD = 100;
     const BUY_SPREAD_MULTIPLIER = 0.995;
     const SELL_SPREAD_MULTIPLIER = 1.005;
+    // API principale + endpoint alternatif attendu dans la spécification.
     const API_ENDPOINTS = [
       'https://open.er-api.com/v6/latest/',
       'https://api.exchangerate-open.com/v6/latest/'
@@ -242,14 +243,21 @@
     }
 
     function parseLocalizedNumber(input) {
-      const normalized = String(input)
+      const raw = String(input).trim();
+      const isNegative = raw.startsWith('-');
+      const compact = raw
         .replace(/\s/g, '')
         .replace(/,/g, '.')
-        .replace(/(?!^)-/g, '')
-        .replace(/[^0-9.-]/g, '');
-      const pieces = normalized.split('.');
-      const sanitized = pieces.length > 2 ? `${pieces.shift()}.${pieces.join('')}` : normalized;
-      const parsed = Number(sanitized);
+        .replace(/[^0-9.]/g, '');
+      const pieces = compact.split('.');
+      let normalized = pieces.shift() || '0';
+      if (pieces.length > 0) {
+        normalized = `${normalized}.${pieces.join('')}`;
+      }
+      if (isNegative && normalized !== '0') {
+        normalized = `-${normalized}`;
+      }
+      const parsed = Number(normalized);
       return Number.isFinite(parsed) ? parsed : null;
     }
 
@@ -298,7 +306,9 @@
               source: url
             };
           }
-        } catch (_) {}
+        } catch (error) {
+          console.warn('Erreur de récupération des taux:', error);
+        }
       }
       const usdBase = fallbackUsdRates[baseCode] || 1;
       const rates = Object.fromEntries(Object.entries(fallbackUsdRates).map(([code, perUsd]) => [code, perUsd / usdBase]));
@@ -393,8 +403,8 @@
         const field = cell.dataset.field;
         const targetName = cell.dataset.target;
         const input = document.createElement('input');
-        input.type = 'number';
-        input.step = 'any';
+        input.type = 'text';
+        input.inputMode = 'decimal';
         input.value = String(parseLocalizedNumber(original) ?? '');
         input.style.width = '120px';
         cell.textContent = '';
@@ -440,7 +450,8 @@
         r.country.code === getSelectedCountry().code ? '(même zone)' : r.spread,
         r.variation === null ? '' : `${r.variation.toFixed(2)}%`
       ]);
-      const csv = '\uFEFF' + [headers, ...rows].map(line => line.map(v => `"${String(v).replaceAll('"', '""')}"`).join(',')).join('\n');
+      const escapedLines = [headers, ...rows].map((line) => line.map((v) => `"${String(v).replaceAll('"', '""')}"`).join(','));
+      const csv = '\uFEFF' + escapedLines.join('\n');
       downloadFile('tableau-multi-devises.csv', csv, 'text/csv;charset=utf-8;');
     }
 
@@ -465,7 +476,9 @@
       state.previousRatesByCode = previous;
       localStorage.setItem(STORAGE_KEYS.previousRates, JSON.stringify(previous));
       elements.lastUpdated.textContent = new Date(result.updatedAt).toLocaleString('fr-FR');
-      elements.rateSource.textContent = result.source.includes('Fallback') ? 'Fallback statique' : 'API open.er-api/exchangerate-open';
+      elements.rateSource.textContent = result.source.includes('Fallback')
+        ? 'Fallback statique'
+        : `API ${new URL(result.source).hostname}`;
       elements.loadingState.textContent = result.source.includes('Fallback')
         ? '⚠️ API indisponible, fallback statique utilisé'
         : '✅ Taux chargés';
