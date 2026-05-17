@@ -252,9 +252,10 @@
         .replace(/,/g, '.')
         .replace(/[^0-9.]/g, '');
       const pieces = compact.split('.');
+      if (pieces.length > 2) return null;
       let normalized = pieces.shift() || '0';
-      if (pieces.length > 0) {
-        normalized = `${normalized}.${pieces.join('')}`;
+      if (pieces.length === 1) {
+        normalized = `${normalized}.${pieces[0]}`;
       }
       if (isNegative && normalized !== '0') {
         normalized = `-${normalized}`;
@@ -314,8 +315,9 @@
           console.warn('Erreur de récupération des taux:', error);
         }
       }
-      const usdBase = fallbackUsdRates[baseCode] || 1;
-      const rates = Object.fromEntries(Object.entries(fallbackUsdRates).map(([code, perUsd]) => [code, perUsd / usdBase]));
+      const usdBase = fallbackUsdRates[baseCode];
+      const safeUsdBase = Number.isFinite(usdBase) && usdBase > 0 ? usdBase : 1;
+      const rates = Object.fromEntries(Object.entries(fallbackUsdRates).map(([code, perUsd]) => [code, perUsd / safeUsdBase]));
       rates[baseCode] = 1;
       return { rates, updatedAt: new Date(), source: 'Fallback statique local' };
     }
