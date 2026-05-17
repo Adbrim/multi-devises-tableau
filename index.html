@@ -130,6 +130,7 @@
         </table>
       </div>
       <div class="hint">Double-cliquez sur Achat/Vente pour modifier manuellement (sauvegarde automatique).</div>
+      <div class="hint" id="editStatus"></div>
     </section>
   </div>
 
@@ -225,7 +226,8 @@
       summaryCount: document.getElementById('summaryCount'),
       summaryAvg: document.getElementById('summaryAvg'),
       summaryHigh: document.getElementById('summaryHigh'),
-      summaryLow: document.getElementById('summaryLow')
+      summaryLow: document.getElementById('summaryLow'),
+      editStatus: document.getElementById('editStatus')
     };
 
     let state = {
@@ -302,7 +304,9 @@
           if (data && data.rates && Object.keys(data.rates).length > 0) {
             return {
               rates: data.rates,
-              updatedAt: data.time_last_update_utc ? new Date(data.time_last_update_utc) : new Date(),
+              updatedAt: data.time_last_update_utc
+                ? new Date(data.time_last_update_utc)
+                : (data.time_last_update_unix ? new Date(data.time_last_update_unix * 1000) : new Date()),
               source: url
             };
           }
@@ -415,6 +419,8 @@
         const save = () => {
           const parsed = parseLocalizedNumber(input.value);
           if (!Number.isFinite(parsed) || parsed <= 0) {
+            elements.editStatus.textContent = '⚠️ Valeur invalide: entrez un nombre positif.';
+            setTimeout(() => { elements.editStatus.textContent = ''; }, 2200);
             renderTable();
             return;
           }
