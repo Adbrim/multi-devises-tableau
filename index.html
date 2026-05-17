@@ -91,7 +91,7 @@
       <div class="controls">
         <div class="row">
           <select id="sourceCountry"></select>
-          <button id="refreshBtn" class="btn-green"><i class="fa-solid fa-rotate"></i> 🔄 Actualiser</button>
+          <button id="refreshBtn" class="btn-green"><i class="fa-solid fa-rotate"></i> Actualiser</button>
           <button id="exportCsvBtn"><i class="fa-solid fa-file-csv"></i> Export CSV</button>
           <button id="exportJsonBtn"><i class="fa-solid fa-file-code"></i> Export JSON</button>
         </div>
@@ -450,8 +450,8 @@
         r.country.code === getSelectedCountry().code ? '(même zone)' : r.spread,
         r.variation === null ? '' : `${r.variation.toFixed(2)}%`
       ]);
-      const escapedLines = [headers, ...rows].map((line) => line.map((v) => `"${String(v).replaceAll('"', '""')}"`).join(','));
-      const csv = '\uFEFF' + escapedLines.join('\n');
+      const csvLines = [headers, ...rows].map((line) => line.map((v) => `"${String(v).replaceAll('"', '""')}"`).join(','));
+      const csv = '\uFEFF' + csvLines.join('\n');
       downloadFile('tableau-multi-devises.csv', csv, 'text/csv;charset=utf-8;');
     }
 
