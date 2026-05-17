@@ -1,0 +1,520 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Tableau Multi-Devises Achat / Vente</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.2/css/all.min.css" referrerpolicy="no-referrer" />
+  <style>
+    :root {
+      --bg: #0d1117;
+      --panel: #161b22;
+      --panel-2: #21262d;
+      --text: #f0f6fc;
+      --muted: #8b949e;
+      --green: #238636;
+      --red: #f85149;
+      --gold: #d4a72c;
+      --border: #30363d;
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      font-family: Inter, system-ui, -apple-system, Segoe UI, Roboto, Arial, sans-serif;
+      background: radial-gradient(circle at top right, #1f2937 0%, var(--bg) 40%);
+      color: var(--text);
+      min-height: 100vh;
+    }
+    .container {
+      width: min(1200px, 96vw);
+      margin: 1rem auto 2rem;
+      animation: fadeIn .35s ease;
+    }
+    .header, .panel, .card { background: var(--panel); border: 1px solid var(--border); border-radius: 14px; }
+    .header { padding: 1rem; margin-bottom: .9rem; }
+    h1 { margin: 0 0 .6rem; font-size: clamp(1.15rem, 3vw, 1.8rem); }
+    .subtitle { color: var(--muted); font-size: .93rem; }
+    .controls { display: grid; grid-template-columns: 1fr; gap: .7rem; margin-top: .8rem; }
+    .row { display: flex; flex-wrap: wrap; gap: .6rem; }
+    select, input, button {
+      border: 1px solid var(--border);
+      background: var(--panel-2);
+      color: var(--text);
+      border-radius: 10px;
+      padding: .62rem .75rem;
+      font-size: .92rem;
+    }
+    select, input { min-width: 220px; }
+    button { cursor: pointer; transition: transform .15s ease, border-color .2s ease, background .2s ease; }
+    button:hover { transform: translateY(-1px); border-color: var(--gold); }
+    .btn-green { background: linear-gradient(180deg, #2ea043, #238636); border-color: #2ea043; }
+    .filters button { padding: .5rem .75rem; }
+    .filters button.active { background: #2f81f7; border-color: #2f81f7; }
+    .meta { display: flex; gap: .8rem; flex-wrap: wrap; color: var(--muted); font-size: .85rem; margin-top: .4rem; }
+    .spinner {
+      display: inline-block; width: 15px; height: 15px; border: 2px solid #4b5563; border-top-color: var(--gold); border-radius: 50%; animation: spin .8s linear infinite;
+      vertical-align: middle;
+    }
+    .cards { display: grid; grid-template-columns: repeat(2, 1fr); gap: .7rem; margin-bottom: .8rem; }
+    .card { padding: .75rem; }
+    .card small { color: var(--muted); display: block; margin-bottom: .25rem; }
+    .card strong { font-size: 1rem; }
+    .panel { padding: .8rem; }
+    .table-wrap { overflow-x: auto; border: 1px solid var(--border); border-radius: 10px; }
+    table { width: 100%; border-collapse: collapse; min-width: 790px; }
+    th, td { padding: .62rem .55rem; border-bottom: 1px solid #21262d; text-align: left; }
+    th { background: #11161d; position: sticky; top: 0; z-index: 1; }
+    tbody tr:hover { background: #1d2530; }
+    .editable { cursor: pointer; }
+    .editable:hover { outline: 1px dashed #3b82f6; outline-offset: -2px; }
+    .same-zone { color: var(--gold); font-weight: 600; font-size: .85rem; }
+    .up { color: #3fb950; font-weight: 600; }
+    .down { color: var(--red); font-weight: 600; }
+    .muted { color: var(--muted); }
+    .hint { font-size: .8rem; color: var(--muted); margin-top: .45rem; }
+    @keyframes spin { to { transform: rotate(360deg); } }
+    @keyframes fadeIn { from { opacity: 0; transform: translateY(4px); } to { opacity: 1; transform: translateY(0);} }
+    @media (min-width: 760px) {
+      .controls { grid-template-columns: 1fr; }
+      .cards { grid-template-columns: repeat(4, 1fr); }
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <section class="header">
+      <h1><i class="fa-solid fa-coins"></i> Tableau Multi-Devises Achat / Vente</h1>
+      <div class="subtitle">Base: <span id="selectedCountryLabel">🇬🇳 Guinée (GNF)</span></div>
+      <div class="controls">
+        <div class="row">
+          <select id="sourceCountry"></select>
+          <button id="refreshBtn" class="btn-green"><i class="fa-solid fa-rotate"></i> Actualiser</button>
+          <button id="exportCsvBtn"><i class="fa-solid fa-file-csv"></i> Export CSV</button>
+          <button id="exportJsonBtn"><i class="fa-solid fa-file-code"></i> Export JSON</button>
+        </div>
+        <div class="row">
+          <input id="searchInput" type="search" placeholder="🔍 Filtrer par pays ou code devise" />
+        </div>
+        <div class="row filters" id="regionFilters"></div>
+      </div>
+      <div class="meta">
+        <div id="loadingState"><span class="spinner"></span> Chargement des taux…</div>
+        <div>Dernière mise à jour: <span id="lastUpdated">-</span></div>
+        <div>Source: <span id="rateSource">-</span></div>
+      </div>
+    </section>
+
+    <section class="cards">
+      <div class="card"><small>Nombre de devises affichées</small><strong id="summaryCount">0</strong></div>
+      <div class="card"><small>Taux moyen (marché)</small><strong id="summaryAvg">0</strong></div>
+      <div class="card"><small>Plus haute valeur</small><strong id="summaryHigh">-</strong></div>
+      <div class="card"><small>Plus basse valeur</small><strong id="summaryLow">-</strong></div>
+    </section>
+
+    <section class="panel">
+      <div class="table-wrap">
+        <table>
+          <thead>
+            <tr>
+              <th>Pays</th>
+              <th>Achat</th>
+              <th>Vente</th>
+              <th>Écart</th>
+              <th>Variation</th>
+            </tr>
+          </thead>
+          <tbody id="ratesTbody"></tbody>
+        </table>
+      </div>
+      <div class="hint">Double-cliquez sur Achat/Vente pour modifier manuellement (sauvegarde automatique).</div>
+      <div class="hint" id="editStatus"></div>
+    </section>
+  </div>
+
+  <script>
+    const STORAGE_KEYS = {
+      selectedCountry: 'mdt_selected_country',
+      manualRates: 'mdt_manual_rates',
+      previousRates: 'mdt_previous_rates'
+    };
+    const LARGE_VALUE_THRESHOLD = 100;
+    const BUY_SPREAD_MULTIPLIER = 0.995;
+    const SELL_SPREAD_MULTIPLIER = 1.005;
+    // API principale + endpoint alternatif attendu dans la spécification.
+    const API_ENDPOINTS = [
+      'https://open.er-api.com/v6/latest/',
+      'https://api.exchangerate-open.com/v6/latest/'
+    ];
+
+    const countries = [
+      { name: 'Guinée', code: 'GNF', flag: '🇬🇳', region: 'Afrique Ouest' },
+      { name: 'Sénégal', code: 'XOF', flag: '🇸🇳', region: 'Afrique Ouest' },
+      { name: 'Mali', code: 'XOF', flag: '🇲🇱', region: 'Afrique Ouest' },
+      { name: "Côte d'Ivoire", code: 'XOF', flag: '🇨🇮', region: 'Afrique Ouest' },
+      { name: 'Sierra Leone', code: 'SLL', flag: '🇸🇱', region: 'Afrique Ouest' },
+      { name: 'Liberia', code: 'LRD', flag: '🇱🇷', region: 'Afrique Ouest' },
+      { name: 'Guinée-Bissau', code: 'XOF', flag: '🇬🇼', region: 'Afrique Ouest' },
+      { name: 'Gambie', code: 'GMD', flag: '🇬🇲', region: 'Afrique Ouest' },
+      { name: 'Mauritanie', code: 'MRU', flag: '🇲🇷', region: 'Afrique Ouest' },
+      { name: 'Ghana', code: 'GHS', flag: '🇬🇭', region: 'Afrique Ouest' },
+      { name: 'Nigeria', code: 'NGN', flag: '🇳🇬', region: 'Afrique Ouest' },
+      { name: 'Bénin', code: 'XOF', flag: '🇧🇯', region: 'Afrique Ouest' },
+      { name: 'Togo', code: 'XOF', flag: '🇹🇬', region: 'Afrique Ouest' },
+      { name: 'Burkina Faso', code: 'XOF', flag: '🇧🇫', region: 'Afrique Ouest' },
+      { name: 'Niger', code: 'XOF', flag: '🇳🇪', region: 'Afrique Ouest' },
+      { name: 'Cap-Vert', code: 'CVE', flag: '🇨🇻', region: 'Afrique Ouest' },
+      { name: 'Cameroun', code: 'XAF', flag: '🇨🇲', region: 'Afrique Centrale' },
+      { name: 'Congo-Brazzaville', code: 'XAF', flag: '🇨🇬', region: 'Afrique Centrale' },
+      { name: 'RD Congo', code: 'CDF', flag: '🇨🇩', region: 'Afrique Centrale' },
+      { name: 'Gabon', code: 'XAF', flag: '🇬🇦', region: 'Afrique Centrale' },
+      { name: 'Tchad', code: 'XAF', flag: '🇹🇩', region: 'Afrique Centrale' },
+      { name: 'Maroc', code: 'MAD', flag: '🇲🇦', region: 'Afrique Nord' },
+      { name: 'Algérie', code: 'DZD', flag: '🇩🇿', region: 'Afrique Nord' },
+      { name: 'Tunisie', code: 'TND', flag: '🇹🇳', region: 'Afrique Nord' },
+      { name: 'Égypte', code: 'EGP', flag: '🇪🇬', region: 'Afrique Nord' },
+      { name: 'Kenya', code: 'KES', flag: '🇰🇪', region: 'Afrique Est' },
+      { name: 'Éthiopie', code: 'ETB', flag: '🇪🇹', region: 'Afrique Est' },
+      { name: 'Tanzanie', code: 'TZS', flag: '🇹🇿', region: 'Afrique Est' },
+      { name: 'États-Unis', code: 'USD', flag: '🇺🇸', region: 'Monde' },
+      { name: 'France / Zone Euro', code: 'EUR', flag: '🇪🇺', region: 'Monde' },
+      { name: 'Canada', code: 'CAD', flag: '🇨🇦', region: 'Monde' },
+      { name: 'Chine', code: 'CNY', flag: '🇨🇳', region: 'Monde' },
+      { name: 'Royaume-Uni', code: 'GBP', flag: '🇬🇧', region: 'Monde' },
+      { name: 'Japon', code: 'JPY', flag: '🇯🇵', region: 'Monde' },
+      { name: 'Inde', code: 'INR', flag: '🇮🇳', region: 'Monde' },
+      { name: 'Russie', code: 'RUB', flag: '🇷🇺', region: 'Monde' },
+      { name: 'Brésil', code: 'BRL', flag: '🇧🇷', region: 'Monde' },
+      { name: 'Australie', code: 'AUD', flag: '🇦🇺', region: 'Monde' },
+      { name: 'Suisse', code: 'CHF', flag: '🇨🇭', region: 'Monde' },
+      { name: 'Arabie Saoudite', code: 'SAR', flag: '🇸🇦', region: 'Monde' },
+      { name: 'Émirats Arabes Unis', code: 'AED', flag: '🇦🇪', region: 'Monde' },
+      { name: 'Turquie', code: 'TRY', flag: '🇹🇷', region: 'Monde' },
+      { name: 'Mexique', code: 'MXN', flag: '🇲🇽', region: 'Monde' },
+      { name: 'Corée du Sud', code: 'KRW', flag: '🇰🇷', region: 'Monde' },
+      { name: 'Indonésie', code: 'IDR', flag: '🇮🇩', region: 'Monde' },
+      { name: 'Afrique du Sud', code: 'ZAR', flag: '🇿🇦', region: 'Monde' },
+      { name: 'Argentine', code: 'ARS', flag: '🇦🇷', region: 'Monde' },
+      { name: 'Norvège', code: 'NOK', flag: '🇳🇴', region: 'Monde' },
+      { name: 'Suède', code: 'SEK', flag: '🇸🇪', region: 'Monde' },
+      { name: 'Singapour', code: 'SGD', flag: '🇸🇬', region: 'Monde' }
+    ];
+
+    const fallbackUsdRates = {
+      GNF: 8600, XOF: 600, SLL: 22.8, LRD: 194, GMD: 70, MRU: 39.5, GHS: 14.3, NGN: 1450,
+      CVE: 101.5, XAF: 600, CDF: 2800, MAD: 9.95, DZD: 135, TND: 3.12, EGP: 47.4,
+      KES: 129, ETB: 57.2, TZS: 2580, USD: 1, EUR: 0.92, CAD: 1.37, CNY: 7.2, GBP: 0.79,
+      JPY: 153, INR: 83.5, RUB: 92, BRL: 5.3, AUD: 1.51, CHF: 0.91, SAR: 3.75, AED: 3.67,
+      TRY: 32.1, MXN: 16.9, KRW: 1360, IDR: 16000, ZAR: 18.7, ARS: 880, NOK: 10.8, SEK: 10.5,
+      SGD: 1.35
+    };
+
+    const elements = {
+      sourceCountry: document.getElementById('sourceCountry'),
+      selectedCountryLabel: document.getElementById('selectedCountryLabel'),
+      refreshBtn: document.getElementById('refreshBtn'),
+      exportCsvBtn: document.getElementById('exportCsvBtn'),
+      exportJsonBtn: document.getElementById('exportJsonBtn'),
+      searchInput: document.getElementById('searchInput'),
+      regionFilters: document.getElementById('regionFilters'),
+      ratesTbody: document.getElementById('ratesTbody'),
+      loadingState: document.getElementById('loadingState'),
+      lastUpdated: document.getElementById('lastUpdated'),
+      rateSource: document.getElementById('rateSource'),
+      summaryCount: document.getElementById('summaryCount'),
+      summaryAvg: document.getElementById('summaryAvg'),
+      summaryHigh: document.getElementById('summaryHigh'),
+      summaryLow: document.getElementById('summaryLow'),
+      editStatus: document.getElementById('editStatus')
+    };
+
+    let state = {
+      selectedCountryName: localStorage.getItem(STORAGE_KEYS.selectedCountry) || 'Guinée',
+      regionFilter: 'Tous',
+      query: '',
+      ratesByCode: {},
+      previousRatesByCode: JSON.parse(localStorage.getItem(STORAGE_KEYS.previousRates) || '{}'),
+      manualRates: JSON.parse(localStorage.getItem(STORAGE_KEYS.manualRates) || '{}'),
+      lastRendered: []
+    };
+
+    function formatNumber(value) {
+      return Number(value).toLocaleString('fr-FR', { maximumFractionDigits: value >= LARGE_VALUE_THRESHOLD ? 2 : 4 });
+    }
+
+    function parseLocalizedNumber(input) {
+      const raw = String(input).trim();
+      const isNegative = raw.startsWith('-');
+      const compact = raw
+        .replace(/\s/g, '')
+        .replace(/,/g, '.')
+        .replace(/[^0-9.]/g, '');
+      const pieces = compact.split('.');
+      if (pieces.length > 2) return null;
+      let normalized = pieces.shift() || '0';
+      if (pieces.length === 1) {
+        normalized = `${normalized}.${pieces[0]}`;
+      }
+      if (isNegative && normalized !== '0') {
+        normalized = `-${normalized}`;
+      }
+      const parsed = Number(normalized);
+      return Number.isFinite(parsed) ? parsed : null;
+    }
+
+    function getSelectedCountry() {
+      return countries.find(c => c.name === state.selectedCountryName) || countries[0];
+    }
+
+    function buildCountrySelect() {
+      const grouped = countries.reduce((acc, c) => {
+        acc[c.region] = acc[c.region] || [];
+        acc[c.region].push(c);
+        return acc;
+      }, {});
+      elements.sourceCountry.innerHTML = Object.entries(grouped).map(([region, list]) =>
+        `<optgroup label="${region}">${list.map(c => `<option value="${c.name}">${c.flag} ${c.name} (${c.code})</option>`).join('')}</optgroup>`
+      ).join('');
+      elements.sourceCountry.value = getSelectedCountry().name;
+    }
+
+    function buildRegionFilters() {
+      ['Tous', 'Afrique Ouest', 'Afrique Centrale', 'Afrique Nord', 'Afrique Est', 'Monde'].forEach(label => {
+        const btn = document.createElement('button');
+        btn.type = 'button';
+        btn.textContent = label;
+        btn.classList.toggle('active', label === state.regionFilter);
+        btn.addEventListener('click', () => {
+          state.regionFilter = label;
+          [...elements.regionFilters.children].forEach(x => x.classList.toggle('active', x.textContent === label));
+          renderTable();
+        });
+        elements.regionFilters.appendChild(btn);
+      });
+    }
+
+    async function fetchRates(baseCode) {
+      const urls = API_ENDPOINTS.map((endpoint) => `${endpoint}${baseCode}`);
+      for (const url of urls) {
+        try {
+          const response = await fetch(url);
+          if (!response.ok) continue;
+          const data = await response.json();
+          if (data && data.rates && Object.keys(data.rates).length > 0) {
+            return {
+              rates: data.rates,
+              updatedAt: data.time_last_update_utc
+                ? new Date(data.time_last_update_utc)
+                : (data.time_last_update_unix ? new Date(data.time_last_update_unix * 1000) : new Date()),
+              source: url
+            };
+          }
+        } catch (error) {
+          console.warn('Erreur de récupération des taux:', error);
+        }
+      }
+      const usdBase = fallbackUsdRates[baseCode];
+      const safeUsdBase = Number.isFinite(usdBase) && usdBase > 0 ? usdBase : 1;
+      const rates = Object.fromEntries(Object.entries(fallbackUsdRates).map(([code, perUsd]) => [code, perUsd / safeUsdBase]));
+      rates[baseCode] = 1;
+      return { rates, updatedAt: new Date(), source: 'Fallback statique local' };
+    }
+
+    function getMarketRateForCountry(country) {
+      const selected = getSelectedCountry();
+      if (country.code === selected.code) return 1;
+      return state.ratesByCode[country.code] ?? (fallbackUsdRates[country.code] / (fallbackUsdRates[selected.code] || 1));
+    }
+
+    function getManualKey(sourceName, targetName) {
+      return `${sourceName}__${targetName}`;
+    }
+
+    function computeRows() {
+      const selected = getSelectedCountry();
+      const q = state.query.trim().toLowerCase();
+      return countries
+        .filter(c => c.name !== selected.name)
+        .filter(c => state.regionFilter === 'Tous' || c.region === state.regionFilter)
+        .filter(c => !q || c.name.toLowerCase().includes(q) || c.code.toLowerCase().includes(q))
+        .map(c => {
+          const market = getMarketRateForCountry(c);
+          const manual = state.manualRates[getManualKey(selected.name, c.name)] || {};
+          const buy = Number(manual.buy ?? market * BUY_SPREAD_MULTIPLIER);
+          const sell = Number(manual.sell ?? market * SELL_SPREAD_MULTIPLIER);
+          const prev = state.previousRatesByCode[c.code];
+          const variation = typeof prev === 'number' && prev !== 0 ? ((market - prev) / prev) * 100 : null;
+          return { country: c, market, buy, sell, spread: sell - buy, variation };
+        });
+    }
+
+    function updateSummary(rows) {
+      elements.summaryCount.textContent = String(rows.length);
+      if (!rows.length) {
+        elements.summaryAvg.textContent = '0';
+        elements.summaryHigh.textContent = '-';
+        elements.summaryLow.textContent = '-';
+        return;
+      }
+      const avg = rows.reduce((s, r) => s + r.market, 0) / rows.length;
+      const high = rows.reduce((a, b) => a.market > b.market ? a : b);
+      const low = rows.reduce((a, b) => a.market < b.market ? a : b);
+      elements.summaryAvg.textContent = formatNumber(avg);
+      elements.summaryHigh.textContent = `${high.country.code} (${formatNumber(high.market)})`;
+      elements.summaryLow.textContent = `${low.country.code} (${formatNumber(low.market)})`;
+    }
+
+    function variationHtml(value) {
+      if (value === null) return '<span class="muted">—</span>';
+      if (value >= 0) return `<span class="up">▲ ${Math.abs(value).toFixed(2)}%</span>`;
+      return `<span class="down">▼ ${Math.abs(value).toFixed(2)}%</span>`;
+    }
+
+    function renderTable() {
+      const selected = getSelectedCountry();
+      const rows = computeRows();
+      state.lastRendered = rows;
+      elements.selectedCountryLabel.textContent = `${selected.flag} ${selected.name} (${selected.code})`;
+      updateSummary(rows);
+      elements.ratesTbody.innerHTML = rows.map((r, i) => {
+        const sameZone = r.country.code === selected.code;
+        const spread = sameZone ? '<span class="same-zone">(même zone)</span>' : formatNumber(r.spread);
+        return `
+          <tr data-row="${i}">
+            <td>${r.country.flag} ${r.country.name} <span class="muted">(${r.country.code})</span></td>
+            <td class="editable" data-field="buy" data-target="${r.country.name}">${formatNumber(r.buy)}</td>
+            <td class="editable" data-field="sell" data-target="${r.country.name}">${formatNumber(r.sell)}</td>
+            <td>${spread}</td>
+            <td>${variationHtml(r.variation)}</td>
+          </tr>
+        `;
+      }).join('') || '<tr><td colspan="5" class="muted">Aucune donnée selon les filtres.</td></tr>';
+    }
+
+    function persistManualRate(targetName, field, value) {
+      const sourceName = getSelectedCountry().name;
+      const key = getManualKey(sourceName, targetName);
+      const prev = state.manualRates[key] || {};
+      state.manualRates[key] = { ...prev, [field]: value };
+      localStorage.setItem(STORAGE_KEYS.manualRates, JSON.stringify(state.manualRates));
+    }
+
+    function setupEditableCells() {
+      elements.ratesTbody.addEventListener('dblclick', (event) => {
+        const cell = event.target.closest('.editable');
+        if (!cell) return;
+        const original = cell.textContent.trim();
+        const field = cell.dataset.field;
+        const targetName = cell.dataset.target;
+        const input = document.createElement('input');
+        input.type = 'text';
+        input.inputMode = 'decimal';
+        input.value = String(parseLocalizedNumber(original) ?? '');
+        input.style.width = '120px';
+        cell.textContent = '';
+        cell.appendChild(input);
+        input.focus();
+        input.select();
+
+        const save = () => {
+          const parsed = parseLocalizedNumber(input.value);
+          if (!Number.isFinite(parsed) || parsed <= 0) {
+            elements.editStatus.textContent = '⚠️ Valeur invalide: entrez un nombre positif.';
+            setTimeout(() => { elements.editStatus.textContent = ''; }, 2200);
+            renderTable();
+            return;
+          }
+          persistManualRate(targetName, field, parsed);
+          renderTable();
+        };
+
+        input.addEventListener('blur', save, { once: true });
+        input.addEventListener('keydown', (e) => {
+          if (e.key === 'Enter') input.blur();
+          if (e.key === 'Escape') renderTable();
+        });
+      });
+    }
+
+    function downloadFile(filename, content, mime) {
+      const blob = new Blob([content], { type: mime });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = filename;
+      a.click();
+      URL.revokeObjectURL(url);
+    }
+
+    function exportCsv() {
+      const headers = ['Pays', 'Devise', 'Achat', 'Vente', 'Écart', 'Variation'];
+      const rows = state.lastRendered.map(r => [
+        r.country.name,
+        r.country.code,
+        r.buy,
+        r.sell,
+        r.country.code === getSelectedCountry().code ? '(même zone)' : r.spread,
+        r.variation === null ? '' : `${r.variation.toFixed(2)}%`
+      ]);
+      const csvLines = [headers, ...rows].map((line) => line.map((v) => `"${String(v).replaceAll('"', '""')}"`).join(','));
+      const csv = '\uFEFF' + csvLines.join('\n');
+      downloadFile('tableau-multi-devises.csv', csv, 'text/csv;charset=utf-8;');
+    }
+
+    function exportJson() {
+      const payload = state.lastRendered.map(r => ({
+        country: r.country.name,
+        currency: r.country.code,
+        buy: r.buy,
+        sell: r.sell,
+        spread: r.country.code === getSelectedCountry().code ? 'même zone' : r.spread,
+        variation: r.variation
+      }));
+      downloadFile('tableau-multi-devises.json', JSON.stringify(payload, null, 2), 'application/json;charset=utf-8;');
+    }
+
+    async function loadAndRenderRates() {
+      const selected = getSelectedCountry();
+      elements.loadingState.innerHTML = '<span class="spinner"></span> Chargement des taux…';
+      const previous = state.ratesByCode;
+      const result = await fetchRates(selected.code);
+      state.ratesByCode = result.rates;
+      state.previousRatesByCode = previous;
+      localStorage.setItem(STORAGE_KEYS.previousRates, JSON.stringify(previous));
+      elements.lastUpdated.textContent = new Date(result.updatedAt).toLocaleString('fr-FR');
+      elements.rateSource.textContent = result.source.includes('Fallback')
+        ? 'Fallback statique'
+        : `API ${new URL(result.source).hostname}`;
+      elements.loadingState.textContent = result.source.includes('Fallback')
+        ? '⚠️ API indisponible, fallback statique utilisé'
+        : '✅ Taux chargés';
+      renderTable();
+    }
+
+    function wireEvents() {
+      elements.sourceCountry.addEventListener('change', async () => {
+        state.selectedCountryName = elements.sourceCountry.value;
+        localStorage.setItem(STORAGE_KEYS.selectedCountry, state.selectedCountryName);
+        await loadAndRenderRates();
+      });
+      elements.searchInput.addEventListener('input', () => {
+        state.query = elements.searchInput.value;
+        renderTable();
+      });
+      elements.refreshBtn.addEventListener('click', loadAndRenderRates);
+      elements.exportCsvBtn.addEventListener('click', exportCsv);
+      elements.exportJsonBtn.addEventListener('click', exportJson);
+    }
+
+    (async function init() {
+      buildCountrySelect();
+      buildRegionFilters();
+      wireEvents();
+      setupEditableCells();
+      await loadAndRenderRates();
+    })();
+  </script>
+</body>
+</html>
