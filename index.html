@@ -139,6 +139,13 @@
       manualRates: 'mdt_manual_rates',
       previousRates: 'mdt_previous_rates'
     };
+    const LARGE_VALUE_THRESHOLD = 100;
+    const BUY_SPREAD_MULTIPLIER = 0.995;
+    const SELL_SPREAD_MULTIPLIER = 1.005;
+    const API_ENDPOINTS = [
+      'https://open.er-api.com/v6/latest/',
+      'https://api.exchangerate-open.com/v6/latest/'
+    ];
 
     const countries = [
       { name: 'Guinée', code: 'GNF', flag: '🇬🇳', region: 'Afrique Ouest' },
@@ -231,7 +238,19 @@
     };
 
     function formatNumber(value) {
-      return Number(value).toLocaleString('fr-FR', { maximumFractionDigits: value >= 100 ? 2 : 4 });
+      return Number(value).toLocaleString('fr-FR', { maximumFractionDigits: value >= LARGE_VALUE_THRESHOLD ? 2 : 4 });
+    }
+
+    function parseLocalizedNumber(input) {
+      const normalized = String(input)
+        .replace(/\s/g, '')
+        .replace(/,/g, '.')
+        .replace(/(?!^)-/g, '')
+        .replace(/[^0-9.-]/g, '');
+      const pieces = normalized.split('.');
+      const sanitized = pieces.length > 2 ? `${pieces.shift()}.${pieces.join('')}` : normalized;
+      const parsed = Number(sanitized);
+      return Number.isFinite(parsed) ? parsed : null;
     }
 
     function getSelectedCountry() {
@@ -266,10 +285,7 @@
     }
 
     async function fetchRates(baseCode) {
-      const urls = [
-        `https://open.er-api.com/v6/latest/${baseCode}`,
-        `https://api.exchangerate-open.com/v6/latest/${baseCode}`
-      ];
+      const urls = API_ENDPOINTS.map((endpoint) => `${endpoint}${baseCode}`);
       for (const url of urls) {
         try {
           const response = await fetch(url);
@@ -310,8 +326,8 @@
         .map(c => {
           const market = getMarketRateForCountry(c);
           const manual = state.manualRates[getManualKey(selected.name, c.name)] || {};
-          const buy = Number(manual.buy ?? market * 0.995);
-          const sell = Number(manual.sell ?? market * 1.005);
+          const buy = Number(manual.buy ?? market * BUY_SPREAD_MULTIPLIER);
+          const sell = Number(manual.sell ?? market * SELL_SPREAD_MULTIPLIER);
           const prev = state.previousRatesByCode[c.code];
           const variation = typeof prev === 'number' && prev !== 0 ? ((market - prev) / prev) * 100 : null;
           return { country: c, market, buy, sell, spread: sell - buy, variation };
@@ -373,13 +389,13 @@
       elements.ratesTbody.addEventListener('dblclick', (event) => {
         const cell = event.target.closest('.editable');
         if (!cell) return;
-        const original = cell.textContent.trim().replace(/\s/g, '').replace(',', '.');
+        const original = cell.textContent.trim();
         const field = cell.dataset.field;
         const targetName = cell.dataset.target;
         const input = document.createElement('input');
         input.type = 'number';
         input.step = 'any';
-        input.value = Number(original) || 0;
+        input.value = String(parseLocalizedNumber(original) ?? '');
         input.style.width = '120px';
         cell.textContent = '';
         cell.appendChild(input);
@@ -387,7 +403,7 @@
         input.select();
 
         const save = () => {
-          const parsed = Number(input.value);
+          const parsed = parseLocalizedNumber(input.value);
           if (!Number.isFinite(parsed) || parsed <= 0) {
             renderTable();
             return;
@@ -424,7 +440,7 @@
         r.country.code === getSelectedCountry().code ? '(même zone)' : r.spread,
         r.variation === null ? '' : `${r.variation.toFixed(2)}%`
       ]);
-      const csv = [headers, ...rows].map(line => line.map(v => `"${String(v).replaceAll('"', '""')}"`).join(',')).join('\n');
+      const csv = '\uFEFF' + [headers, ...rows].map(line => line.map(v => `"${String(v).replaceAll('"', '""')}"`).join(',')).join('\n');
       downloadFile('tableau-multi-devises.csv', csv, 'text/csv;charset=utf-8;');
     }
 
